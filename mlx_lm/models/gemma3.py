@@ -1,7 +1,7 @@
 # Copyright © 2025 Apple Inc.
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import Callable, List, Optional
 
 import mlx.core as mx
 import mlx.nn as nn
@@ -39,10 +39,13 @@ class Model(nn.Module):
     def __call__(
         self,
         inputs: mx.array,
+        embeddings_processors: Optional[List[Callable[[mx.array], mx.array]]] = None,
         cache=None,
         mask: Optional[mx.array] = None,
     ):
-        return self.language_model(inputs, cache=cache, mask=mask)
+        return self.language_model(
+            inputs, embeddings_processors=embeddings_processors, cache=cache, mask=mask
+        )
 
     def sanitize(self, weights):
         weights = tree_unflatten(list(weights.items()))

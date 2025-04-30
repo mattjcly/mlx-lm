@@ -3,6 +3,7 @@
 import argparse
 import contextlib
 import functools
+import inspect
 import json
 import sys
 import time
@@ -291,6 +292,7 @@ def generate_step(
     max_tokens: int = 256,
     sampler: Optional[Callable[mx.array, mx.array]] = None,
     logits_processors: Optional[List[Callable[[mx.array, mx.array], mx.array]]] = None,
+    embeddings_processors: Optional[List[Callable[[mx.array], mx.array]]] = None,
     max_kv_size: Optional[int] = None,
     prompt_cache: Optional[Any] = None,
     prefill_step_size: int = 2048,
@@ -312,6 +314,9 @@ def generate_step(
         logits_processors (List[Callable[[mx.array, mx.array], mx.array]], optional):
           A list of functions that take tokens and logits and return the processed
           logits. Default: ``None``.
+        embeddings_processors (List[Callable[[mx.array], mx.array]], optional):
+          A list of functions that take the prompt embeddings and return the processed
+          embeddings. Default: ``None``.
         max_kv_size (int, optional): Maximum size of the key-value cache. Old
           entries (except the first 4 tokens) will be overwritten.
         prompt_cache (List[Any], optional): A pre-computed prompt cache. Note, if
@@ -352,9 +357,27 @@ def generate_step(
 
     sampler = sampler or (lambda x: mx.argmax(x, axis=-1))
 
+    model_supports_embeddings_processors = False
+    try:
+        signature = inspect.signature(model.__call__)
+        model_supports_embeddings_processors = (
+            "embeddings_processors" in signature.parameters
+        )
+    except (ValueError, TypeError):
+        # leave false if model.__call__ signature cannot be inspected
+        pass
+
     def _step(y):
+        nonlocal embeddings_processors
         with mx.stream(generation_stream):
-            logits = model(y[None], cache=prompt_cache)
+            if model_supports_embeddings_processors:
+                logits = model(
+                    y[None],
+                    embeddings_processors=embeddings_processors,
+                    cache=prompt_cache,
+                )
+            else:
+                logits = model(y[None], cache=prompt_cache)
             logits = logits[:, -1, :]
 
             if logits_processors:
