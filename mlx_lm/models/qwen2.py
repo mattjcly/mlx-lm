@@ -1,7 +1,7 @@
 # Copyright © 2023-2024 Apple Inc.
 
 from dataclasses import dataclass
-from typing import Any, Dict, Optional, Union
+from typing import Any, Callable, Dict, List, Optional, Union
 
 import mlx.core as mx
 import mlx.nn as nn
@@ -135,10 +135,14 @@ class Qwen2Model(nn.Module):
     def __call__(
         self,
         inputs: mx.array,
+        embeddings_processors: Optional[List[Callable[[mx.array], mx.array]]] = None,
         mask: mx.array = None,
         cache=None,
     ):
         h = self.embed_tokens(inputs)
+        if embeddings_processors is not None:
+            for processor in embeddings_processors:
+                h = processor(h)
 
         if mask is None:
             mask = create_attention_mask(h, cache)
@@ -164,10 +168,11 @@ class Model(nn.Module):
     def __call__(
         self,
         inputs: mx.array,
+        embeddings_processors: Optional[List[Callable[[mx.array], mx.array]]] = None,
         mask: mx.array = None,
         cache=None,
     ):
-        out = self.model(inputs, mask, cache)
+        out = self.model(inputs, embeddings_processors, mask, cache)
         if self.args.tie_word_embeddings:
             out = self.model.embed_tokens.as_linear(out)
         else:
