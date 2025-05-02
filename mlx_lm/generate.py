@@ -32,7 +32,7 @@ from .models.cache import (
 )
 from .sample_utils import make_sampler
 from .tokenizer_utils import TokenizerWrapper
-from .utils import load
+from .utils import does_model_support_embeddings_processors, load
 
 DEFAULT_PROMPT = "hello"
 DEFAULT_MAX_TOKENS = 100
@@ -357,15 +357,9 @@ def generate_step(
 
     sampler = sampler or (lambda x: mx.argmax(x, axis=-1))
 
-    model_supports_embeddings_processors = False
-    try:
-        signature = inspect.signature(model.__call__)
-        model_supports_embeddings_processors = (
-            "embeddings_processors" in signature.parameters
-        )
-    except (ValueError, TypeError):
-        # leave false if model.__call__ signature cannot be inspected
-        pass
+    model_supports_embeddings_processors = does_model_support_embeddings_processors(
+        model
+    )
 
     def _step(y):
         nonlocal embeddings_processors
