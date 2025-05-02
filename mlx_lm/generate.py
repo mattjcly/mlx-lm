@@ -3,7 +3,6 @@
 import argparse
 import contextlib
 import functools
-import inspect
 import json
 import sys
 import time
