@@ -31,7 +31,7 @@ from .models.cache import (
 )
 from .sample_utils import make_sampler
 from .tokenizer_utils import TokenizerWrapper
-from .utils import does_model_support_embeddings_processors, load
+from .utils import does_model_support_embeddings_processor, load
 
 DEFAULT_PROMPT = "hello"
 DEFAULT_MAX_TOKENS = 100
@@ -291,7 +291,7 @@ def generate_step(
     max_tokens: int = 256,
     sampler: Optional[Callable[mx.array, mx.array]] = None,
     logits_processors: Optional[List[Callable[[mx.array, mx.array], mx.array]]] = None,
-    embeddings_processors: Optional[List[Callable[[mx.array], mx.array]]] = None,
+    embeddings_processor: Optional[Callable[[mx.array, mx.array], mx.array]] = None,
     max_kv_size: Optional[int] = None,
     prompt_cache: Optional[Any] = None,
     prefill_step_size: int = 2048,
@@ -313,9 +313,9 @@ def generate_step(
         logits_processors (List[Callable[[mx.array, mx.array], mx.array]], optional):
           A list of functions that take tokens and logits and return the processed
           logits. Default: ``None``.
-        embeddings_processors (List[Callable[[mx.array], mx.array]], optional):
-          A list of functions that take the prompt embeddings and return the processed
-          embeddings. Default: ``None``.
+        embeddings_processor (Callable[[mx.array], mx.array], optional):
+          A function that takes the prompt tokens and their embeddings, and returns
+          custom processed embeddings. Default: ``None``.
         max_kv_size (int, optional): Maximum size of the key-value cache. Old
           entries (except the first 4 tokens) will be overwritten.
         prompt_cache (List[Any], optional): A pre-computed prompt cache. Note, if
@@ -356,17 +356,15 @@ def generate_step(
 
     sampler = sampler or (lambda x: mx.argmax(x, axis=-1))
 
-    model_supports_embeddings_processors = does_model_support_embeddings_processors(
-        model
-    )
+    model_supports_embeddings_processor = does_model_support_embeddings_processor(model)
 
     def _step(y):
-        nonlocal embeddings_processors
+        nonlocal embeddings_processor
         with mx.stream(generation_stream):
-            if model_supports_embeddings_processors:
+            if model_supports_embeddings_processor:
                 logits = model(
                     y[None],
-                    embeddings_processors=embeddings_processors,
+                    embeddings_processor=embeddings_processor,
                     cache=prompt_cache,
                 )
             else:

@@ -150,6 +150,7 @@ def load_model(
     strict: bool = True,
     model_config: dict = {},
     get_model_classes: Callable[[dict], Tuple[Type[nn.Module], Type]] = _get_classes,
+    custom_weight_sanitization: Optional[Callable[[dict], dict]] = None,
 ) -> nn.Module:
     """
     Load and initialize the model from a given path.
@@ -166,6 +167,10 @@ def load_model(
         get_model_classes (Callable[[dict], Tuple[Type[nn.Module], Type]], optional):
             A function that returns the model class and model args class given a config.
             Defaults to the ``_get_classes`` function.
+        custom_weight_sanitization (Optional[Callable[[dict], dict]], optional):
+            An optional function that takes a dictionary of weights and returns a processed
+            dictionary of weights. This allows for custom weight filtering or renaming.
+            Defaults to None.
 
     Returns:
         nn.Module: The loaded and initialized model.
@@ -189,7 +194,13 @@ def load_model(
 
     weights = {}
     for wf in weight_files:
-        weights.update(mx.load(wf))
+        file_weights = mx.load(wf)
+
+        # Apply custom weight processing if provided
+        if custom_weight_sanitization is not None:
+            file_weights = custom_weight_sanitization(file_weights)
+
+        weights.update(file_weights)
 
     model_class, model_args_class = get_model_classes(config=config)
 
@@ -558,18 +569,18 @@ def common_prefix_len(list1, list2):
     return min_len
 
 
-def does_model_support_embeddings_processors(model: nn.Module) -> bool:
+def does_model_support_embeddings_processor(model: nn.Module) -> bool:
     """
-    Check if the model supports embeddings processors in its call signature.
+    Check if the model supports an embeddings processor in its call signature.
 
     Args:
         model (nn.Module): The model to check.
 
     Returns:
-        bool: True if the model supports embeddings processors, False otherwise.
+        bool: True if the model supports an embeddings processor, False otherwise.
     """
     try:
         signature = inspect.signature(model.__call__)
-        return "embeddings_processors" in signature.parameters
+        return "embeddings_processor" in signature.parameters
     except (ValueError, TypeError):
         return False

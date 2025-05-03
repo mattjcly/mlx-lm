@@ -135,14 +135,13 @@ class Qwen2Model(nn.Module):
     def __call__(
         self,
         inputs: mx.array,
-        embeddings_processors: Optional[List[Callable[[mx.array], mx.array]]] = None,
+        embeddings_processor: Optional[Callable[[mx.array, mx.array], mx.array]] = None,
         mask: mx.array = None,
         cache=None,
     ):
         h = self.embed_tokens(inputs)
-        if embeddings_processors is not None:
-            for processor in embeddings_processors:
-                h = processor(h)
+        if embeddings_processor is not None:
+            h = embeddings_processor(inputs, h)
 
         if mask is None:
             mask = create_attention_mask(h, cache)
@@ -168,11 +167,11 @@ class Model(nn.Module):
     def __call__(
         self,
         inputs: mx.array,
-        embeddings_processors: Optional[List[Callable[[mx.array], mx.array]]] = None,
+        embeddings_processor: Optional[Callable[[mx.array, mx.array], mx.array]] = None,
         mask: mx.array = None,
         cache=None,
     ):
-        out = self.model(inputs, embeddings_processors, mask, cache)
+        out = self.model(inputs, embeddings_processor, mask, cache)
         if self.args.tie_word_embeddings:
             out = self.model.embed_tokens.as_linear(out)
         else:

@@ -173,15 +173,14 @@ class Gemma3Model(nn.Module):
     def __call__(
         self,
         inputs: mx.array,
-        embeddings_processors: Optional[List[Callable[[mx.array], mx.array]]] = None,
+        embeddings_processor: Optional[Callable[[mx.array, mx.array], mx.array]] = None,
         mask: mx.array = None,
         cache=None,
     ):
 
         h = self.embed_tokens(inputs)
-        if embeddings_processors is not None:
-            for processor in embeddings_processors:
-                h = processor(h)
+        if embeddings_processor is not None:
+            h = embeddings_processor(inputs, h)
         h *= mx.array(self.args.hidden_size**0.5, mx.bfloat16).astype(h.dtype)
 
         if cache is None:
@@ -220,11 +219,11 @@ class Model(nn.Module):
     def __call__(
         self,
         inputs: mx.array,
-        embeddings_processors: Optional[List[Callable[[mx.array], mx.array]]] = None,
+        embeddings_processor: Optional[Callable[[mx.array, mx.array], mx.array]] = None,
         cache=None,
         mask: Optional[mx.array] = None,
     ):
-        out = self.model(inputs, embeddings_processors, mask, cache)
+        out = self.model(inputs, embeddings_processor, mask, cache)
         out = self.lm_head(out)
         return out
 
