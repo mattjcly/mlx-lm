@@ -3,6 +3,7 @@
 import copy
 import glob
 import importlib
+import inspect
 import json
 import logging
 import os
@@ -45,6 +46,7 @@ MODEL_REMAPPING = {
     "mistral": "llama",  # mistral is compatible with llama
     "phi-msft": "phixtral",
     "falcon_mamba": "mamba",
+    "qwen2_5_vl": "qwen2",  # qwen2_5_vl contains a qwen2 text backbone
 }
 
 MAX_FILE_SIZE_GB = 5
@@ -133,6 +135,7 @@ def load_model(
     strict: bool = True,
     model_config: dict = {},
     get_model_classes: Callable[[dict], Tuple[Type[nn.Module], Type]] = _get_classes,
+    custom_weight_sanitization: Optional[Callable[[dict], dict]] = None,
 ) -> nn.Module:
     """
     Load and initialize the model from a given path.
@@ -149,6 +152,10 @@ def load_model(
         get_model_classes (Callable[[dict], Tuple[Type[nn.Module], Type]], optional):
             A function that returns the model class and model args class given a config.
             Defaults to the ``_get_classes`` function.
+        custom_weight_sanitization (Optional[Callable[[dict], dict]], optional):
+            An optional function that takes a dictionary of weights and returns a processed
+            dictionary of weights. This allows for custom weight filtering or renaming.
+            Defaults to None.
 
     Returns:
         nn.Module: The loaded and initialized model.
@@ -172,7 +179,13 @@ def load_model(
 
     weights = {}
     for wf in weight_files:
-        weights.update(mx.load(wf))
+        file_weights = mx.load(wf)
+
+        # Apply custom weight processing if provided
+        if custom_weight_sanitization is not None:
+            file_weights = custom_weight_sanitization(file_weights)
+
+        weights.update(file_weights)
 
     model_class, model_args_class = get_model_classes(config=config)
 
@@ -541,3 +554,18 @@ def common_prefix_len(list1, list2):
     # No mismatch found within the bounds of the shorter list,
     # so the common prefix length is the length of the shorter list.
     return min_len
+
+
+def does_model_support_input_embeddings(model: nn.Module) -> bool:
+    """
+    Check if the model supports input_embeddings in its call signature.
+    Args:
+        model (nn.Module): The model to check.
+    Returns:
+        bool: True if the model supports input_embeddings, False otherwise.
+    """
+    try:
+        signature = inspect.signature(model.__call__)
+        return "input_embeddings" in signature.parameters
+    except (ValueError, TypeError):
+        return False
