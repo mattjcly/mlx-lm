@@ -7,7 +7,7 @@ import mlx.core as mx
 import mlx.nn as nn
 from mlx.utils import tree_flatten, tree_unflatten
 
-from . import llama
+from . import qwen2
 from .base import BaseModelArgs
 
 
@@ -16,29 +16,32 @@ class ModelArgs(BaseModelArgs):
     model_type: str
     text_config: dict
 
-    def __post_init__(self):
-        self.text_config["tie_word_embeddings"] = False
-
 
 class Model(nn.Module):
     def __init__(self, args: ModelArgs):
         super().__init__()
         self.args = args
         self.model_type = args.model_type
-        self.language_model = llama.Model(llama.ModelArgs.from_dict(args.text_config))
+        self.language_model = qwen2.Model(qwen2.ModelArgs.from_dict(args.text_config))
 
     def __call__(
         self,
         inputs: mx.array,
         cache=None,
         mask: Optional[mx.array] = None,
+        input_embeddings: Optional[mx.array] = None,
     ):
-        return self.language_model(inputs, cache=cache, mask=mask)
+        return self.language_model(
+            inputs, cache=cache, mask=mask, input_embeddings=input_embeddings
+        )
 
     def sanitize(self, weights):
         weights = tree_unflatten(list(weights.items()))
         weights.pop("vision_tower", None)
         weights.pop("multi_modal_projector", None)
+        lm_weights = dict(tree_flatten(weights["language_model"]))
+        lm_weights = self.language_model.sanitize(lm_weights)
+        weights["language_model"] = tree_unflatten(list(lm_weights.items()))
         return dict(tree_flatten(weights))
 
     @property
