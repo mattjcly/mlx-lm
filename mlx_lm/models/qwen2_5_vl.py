@@ -1,6 +1,5 @@
 # Copyright © 2025 Apple Inc.
 
-from dataclasses import dataclass
 from typing import Optional
 
 import mlx.core as mx
@@ -8,13 +7,7 @@ import mlx.nn as nn
 from mlx.utils import tree_flatten, tree_unflatten
 
 from . import qwen2
-from .base import BaseModelArgs
-
-
-@dataclass
-class ModelArgs(BaseModelArgs):
-    model_type: str
-    text_config: dict
+from .qwen2 import ModelArgs
 
 
 class Model(nn.Module):
@@ -22,7 +15,10 @@ class Model(nn.Module):
         super().__init__()
         self.args = args
         self.model_type = args.model_type
-        self.language_model = qwen2.Model(qwen2.ModelArgs.from_dict(args.text_config))
+        if args.rope_scaling.get("type", None) is not None:
+            if args.rope_scaling["type"] == "mrope":
+                args.rope_scaling["type"] = "default"
+        self.language_model = qwen2.Model(args)
 
     def __call__(
         self,
